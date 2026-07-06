@@ -15,3 +15,9 @@ variable "lambda_webcounter_update" {
   description = "Lambda function to update the webcounter"
   default = "update_webcounter"
 }
+
+variable "custom_domain_name" {
+  type = string
+  description = "Fully qualified domain name being used for the cloud resume project"
+  default = "doughsmiles.com"
+}

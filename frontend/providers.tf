@@ -7,6 +7,10 @@ terraform {
       source = "hashicorp/aws"
       version = "~> 5.0"
     }
+    spaceship = {
+      source = "namecheap/spaceship"
+      version = ">= 0.4.0"
+    }
   }
 }
 
@@ -32,4 +36,9 @@ provider "aws" {
       Owner = "S. J. Castro"
     }
   }
+}
+
+provider "spaceship" {
+  api_key = var.spaceship_api_key
+  api_secret = var.spaceship_api_secret
 }

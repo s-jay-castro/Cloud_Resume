@@ -1,18 +1,13 @@
-# ==============================================================================
-# 1. STORAGE COMPONENT (S3 BUCKET)
-# ==============================================================================
-# Creates the storage container for your HTML, CSS, and JS files.
 resource "aws_s3_bucket" "website_bucket" {
-  bucket        = var.frontend_bucket_name
-  force_destroy = true # Cleans out files automatically if you run 'terraform destroy'
+  bucket = var.frontend_bucket_name
+  force_destroy = true
 
   tags = {
-    Project   = "Cloud Resume Challenge"
+    Project = "Cloud Resume Challenge"
     Component = "Frontend"
   }
 }
 
-# Configures the S3 storage space to behave specifically like a web server.
 resource "aws_s3_bucket_website_configuration" "website_config" {
   bucket = aws_s3_bucket.website_bucket.id
 
@@ -25,44 +20,39 @@ resource "aws_s3_bucket_website_configuration" "website_config" {
   }
 }
 
-# ==============================================================================
-# 2. SECURITY GUARD COMPONENT (ORIGIN ACCESS CONTROL)
-# ==============================================================================
-# Creates a lock mechanism. It proves to S3 that incoming requests are coming 
-# from your verified CloudFront distribution, keeping the bucket private from the public.
+resource "aws_s3_bucket_public_access_block" "block_public" {
+  bucket = aws_s3_bucket.website_bucket.id
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "resume-s3-oac"
-  description                       = "Secures S3 access so only CloudFront can read files"
+  name = "resume-s3-oac"
+  description = "Secures S3 access so only CloudFront can read files"
   origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
+  signing_behavior = "always"
+  signing_protocol = "sigv4"
 }
 
-# ==============================================================================
-# 3. GLOBAL DELIVERY COMPONENT (CLOUDFRONT CDN)
-# ==============================================================================
-# Deploys your website onto edge servers worldwide for sub-second load times.
 resource "aws_cloudfront_distribution" "website_cdn" {
-  enabled             = true
-  is_ipv6_enabled     = true
+  enabled = true
+  is_ipv6_enabled = true
   default_root_object = "index.html"
 
-  # If you have an SSL certificate from AWS ACM, list your domain names here:
-  # aliases = [var.custom_domain_name, "www.${var.custom_domain_name}"]
+  aliases = [var.custom_domain_name, "www.${var.custom_domain_name}"]
 
-  # Connects the CDN directly to your S3 storage block up above
   origin {
-    domain_name              = aws_s3_bucket.website_bucket.bucket_regional_domain_name
-    origin_id                = "S3-${aws_s3_bucket.website_bucket.id}"
+    domain_name = aws_s3_bucket.website_bucket.bucket_regional_domain_name
+    origin_id = "S3-${aws_s3_bucket.website_bucket.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
   }
-
-  # Caching and protocol configurations
+ 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "S3-${aws_s3_bucket.website_bucket.id}"
-    viewer_protocol_policy = "redirect-to-https" # Automatically upgrades HTTP requests
+    allowed_methods = ["GET", "HEAD"]
+    cached_methods = ["GET", "HEAD"]
+    target_origin_id = "S3-${aws_s3_bucket.website_bucket.id}"
+    viewer_protocol_policy = "redirect-to-https"
 
     forwarded_values {
       query_string = false
@@ -72,30 +62,24 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     }
   }
 
-  # Required geo-restriction block (leaving it open globally)
-  restrictions {
+    restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
 
-  # Uses the standard recommended, cost-friendly SSL certificate configuration
-  # If using a custom domain, replace this sub-block with your ACM certificate reference
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn = aws_acm_certificate_validation.cert.certificate_arn
+    ssl_support_method = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = {
-    Project   = "Cloud Resume Challenge"
+    Project = "Cloud Resume Challenge"
     Component = "Frontend"
   }
 }
 
-# ==============================================================================
-# 4. S3 BUCKET POLICY LAYER
-# ==============================================================================
-# This is the permission sheet applied to S3. It explicitly states: 
-# "Allow the specific CloudFront distribution above to run s3:GetObject on my files."
 resource "aws_s3_bucket_policy" "allow_cloudfront" {
   bucket = aws_s3_bucket.website_bucket.id
 
@@ -103,12 +87,12 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Sid = "AllowCloudFrontServicePrincipalReadOnly"
         Effect = "Allow"
         Principal = {
-          Service = "://amazonaws.com"
+          Service = "cloudfront.amazonaws.com"
         }
-        Action   = "s3:GetObject"
+        Action = "s3:GetObject"
         Resource = "${aws_s3_bucket.website_bucket.arn}/*"
         Condition = {
           StringEquals = {
@@ -120,12 +104,79 @@ resource "aws_s3_bucket_policy" "allow_cloudfront" {
   })
 }
 
-# ==============================================================================
-# 5. OUTPUTS (YOUR EXTERNAL DNS BLUEPRINTS)
-# ==============================================================================
-# Once you run 'terraform apply', these blocks print the exact strings you 
-# need to copy into your external domain registrar (Namecheap, GoDaddy, etc.)
+resource "aws_acm_certificate" "cert" {
+  provider = aws.va
+  domain_name = var.custom_domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "www.${var.custom_domain_name}"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "spaceship_dns_records" "domain_dns" {
+  domain = var.custom_domain_name
+
+  
+  dynamic "records" {
+    for_each = aws_acm_certificate.cert.domain_validation_options
+    content {
+      type = "CNAME"
+      name = stringsuffix(records.value.resource_record_name, ".")
+      value = records.value.resource_record_value
+      ttl = 3600
+    }
+    }
+
+    records {
+    type = "CNAME"
+    name = "@"
+    value = aws_cloudfront_distribution.website_cdn.domain_name
+    ttl = 3600
+    }
+
+    records {
+    type = "CNAME"
+    name = "www"
+    value = aws_cloudfront_distribution.website_cdn.domain_name
+    ttl = 3600
+    }
+  
+    records {
+      type = "MX"
+      name = "@"
+    	value = "mx1.efwd.spaceship.net"
+      ttl = 3600
+    }
+
+    records {
+      type = "MX"
+      name = "@"
+      value = "mx2.efwd.spaceship.net"
+      ttl = 3600
+    }
+
+    records {
+      type = "TXT"
+      name = "@"
+      value = "v=spf1 include:spf.efwd.spaceship.net ~all"
+      ttl = 3600
+    }
+}
+
+resource "aws_acm_certificate_validation" "cert" {
+  provider = aws.va
+  certificate_arn  = aws_acm_certificate.cert.arn
+  validation_record_fqdns = [for record in aws_acm_certificate.cert.domain_validation_options : record.resource_record_name]
+  
+  depends_on = [spaceship_dns_records.domain_dns]
+}
+
 output "cloudfront_domain_name" {
   description = "Point your external custom domain CNAME record to this address"
-  value       = aws_cloudfront_distribution.website_cdn.domain_name
+  value = aws_cloudfront_distribution.website_cdn.domain_name
 }

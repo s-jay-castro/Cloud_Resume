@@ -35,7 +35,7 @@ resource "aws_iam_role_policy_attachment" "execute_lambda" {
 }
 
 resource "aws_iam_policy" "lambda_access_ddb_policy" {
-  name = lambda_access_ddb_policy
+  name = "lambda_access_ddb_policy"
   description = "Allows lambda function the access to the DynamoDB webcounter table"
 
   policy = jsonencode({
@@ -79,4 +79,57 @@ resource "aws_lambda_function" "webcounter_api" {
       DYNAMODB_TABLE = aws_dynamodb_table.webcounter.name
     }
   }
+}
+
+resource "aws_apigatewayv2_api" "resume_api" {
+  name = "cloud-resume-api"
+  protocol_type = "HTTP"
+  
+  cors_configuration {
+    allow_origins = [
+      "https://${var.custom_domain_name}", 
+      "https://www.${var.custom_domain_name}",
+      "http://localhost:*",
+      "http://127.0.0.1:*"
+    ]
+    allow_methods = ["GET", "OPTIONS"]
+    allow_headers = ["content-type"]
+    max_age = 300
+  }
+}
+
+resource "aws_apigatewayv2_route" "counter_route" {
+  api_id = aws_apigatewayv2_api.resume_api.id
+  route_key = "GET /get-count"
+  target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+resource "aws_apigatewayv2_integration" "lambda_integration" {
+  api_id = aws_apigatewayv2_api.resume_api.id
+  integration_type = "AWS_PROXY"
+
+  connection_type = "INTERNET"
+  description = "Resume counter lambda integration"
+  integration_method = "POST"
+  integration_uri = aws_lambda_function.webcounter_api.arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_lambda_permission" "api_gateway_permission" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.webcounter_api.function_name
+  principal = "apigateway.amazonaws.com" 
+  source_arn = "${aws_apigatewayv2_api.resume_api.execution_arn}/*/*"
+}
+
+resource "aws_apigatewayv2_stage" "api_stage" {
+  api_id = aws_apigatewayv2_api.resume_api.id
+  name = "$default"
+  auto_deploy = true
+}
+
+output "api_endpoint" {
+  description = "Base URL for your resume visitor counter API"
+  value       = aws_apigatewayv2_stage.api_stage.invoke_url
 }
