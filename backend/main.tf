@@ -31,7 +31,7 @@ resource "aws_iam_role" "lambda_resume_role" {
 
 resource "aws_iam_role_policy_attachment" "execute_lambda" {
   role = aws_iam_role.lambda_resume_role.name
-  policy_arn = "arn:aws:iam:aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_iam_policy" "lambda_access_ddb_policy" {
@@ -89,8 +89,8 @@ resource "aws_apigatewayv2_api" "resume_api" {
     allow_origins = [
       "https://${var.custom_domain_name}", 
       "https://www.${var.custom_domain_name}",
-      "http://localhost:*",
-      "http://127.0.0.1:*"
+      "http://localhost:5500",
+      "http://127.0.0.1:5500"
     ]
     allow_methods = ["GET", "OPTIONS"]
     allow_headers = ["content-type"]

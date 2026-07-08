@@ -118,64 +118,26 @@ resource "aws_acm_certificate" "cert" {
   }
 }
 
-resource "spaceship_dns_records" "domain_dns" {
-  domain = var.custom_domain_name
-
-  
-  dynamic "records" {
-    for_each = aws_acm_certificate.cert.domain_validation_options
-    content {
-      type = "CNAME"
-      name = stringsuffix(records.value.resource_record_name, ".")
-      value = records.value.resource_record_value
-      ttl = 3600
-    }
-    }
-
-    records {
-    type = "CNAME"
-    name = "@"
-    value = aws_cloudfront_distribution.website_cdn.domain_name
-    ttl = 3600
-    }
-
-    records {
-    type = "CNAME"
-    name = "www"
-    value = aws_cloudfront_distribution.website_cdn.domain_name
-    ttl = 3600
-    }
-  
-    records {
-      type = "MX"
-      name = "@"
-    	value = "mx1.efwd.spaceship.net"
-      ttl = 3600
-    }
-
-    records {
-      type = "MX"
-      name = "@"
-      value = "mx2.efwd.spaceship.net"
-      ttl = 3600
-    }
-
-    records {
-      type = "TXT"
-      name = "@"
-      value = "v=spf1 include:spf.efwd.spaceship.net ~all"
-      ttl = 3600
-    }
-}
-
 resource "aws_acm_certificate_validation" "cert" {
-  provider = aws.va
-  certificate_arn  = aws_acm_certificate.cert.arn
-  validation_record_fqdns = [for record in aws_acm_certificate.cert.domain_validation_options : record.resource_record_name]
-  
-  depends_on = [spaceship_dns_records.domain_dns]
+  provider        = aws.va
+  certificate_arn = aws_acm_certificate.cert.arn
+
+  validation_record_fqdns = [
+    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.resource_record_name
+  ]
+
 }
 
+output "acm_validation_records" {
+  description = "Add these CNAMEs manually in your Spaceship DNS dashboard to validate the certificate."
+  value = {
+    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
+      name = dvo.resource_record_name
+      type = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }
+  }
+}
 output "cloudfront_domain_name" {
   description = "Point your external custom domain CNAME record to this address"
   value = aws_cloudfront_distribution.website_cdn.domain_name

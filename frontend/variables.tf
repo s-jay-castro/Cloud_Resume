@@ -15,15 +15,3 @@ variable "custom_domain_name" {
   description = "Fully qualified domain name being used for the cloud resume project"
   default = "doughsmiles.com"
 }
-
-variable "spaceship_api_key" {
-  type = string
-  description = "Spaceship API Key generated from dashboard profile settings"
-  sensitive = true
-}
-
-variable "spaceship_api_secret" {
-  type = string
-  description = "Spaceship API Secret key generated from profile dashboard settings"
-  sensitive = true
-}
