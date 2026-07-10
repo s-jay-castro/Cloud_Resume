@@ -1,9 +1,9 @@
 async function updateWebCounter() {
   // Set API Gateway URL
-  const apiUrl = 'https://hncd0z2k9j.execute-api.ap-southeast-2.amazonaws.com/'; 
+  const apiUrl = 'https://hncd0z2k9j.execute-api.ap-southeast-2.amazonaws.com/get-count'; 
 
   try {
-    const response = await fetch(apiUrl, { method: 'POST' });
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);

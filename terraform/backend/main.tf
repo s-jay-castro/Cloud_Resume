@@ -27,6 +27,11 @@ resource "aws_iam_role" "lambda_resume_role" {
       }
     ]
   })
+  
+  tags = {
+    Project = "Cloud Resume Challenge"
+    Owner   = "S. J. Castro"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "execute_lambda" {
@@ -127,9 +132,4 @@ resource "aws_apigatewayv2_stage" "api_stage" {
   api_id = aws_apigatewayv2_api.resume_api.id
   name = "$default"
   auto_deploy = true
-}
-
-output "api_endpoint" {
-  description = "Base URL for your resume visitor counter API"
-  value       = aws_apigatewayv2_stage.api_stage.invoke_url
 }
