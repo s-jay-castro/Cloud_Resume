@@ -29,6 +29,13 @@ jobs:
             --delete \
             --cache-control "max-age=86400"
 
+      - name: Debug CloudFront
+        run: |
+          echo "Distribution ID from secret: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
+          aws cloudfront list-distributions \
+            --query "DistributionList.Items[].{Id:Id,Domain:DomainName}" \
+            --output table
+
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
